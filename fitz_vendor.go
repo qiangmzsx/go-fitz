@@ -3,7 +3,7 @@
 package fitz
 
 import (
-	_ "github.com/gen2brain/go-fitz/include/mupdf"
-	_ "github.com/gen2brain/go-fitz/include/mupdf/fitz"
-	_ "github.com/gen2brain/go-fitz/libs"
+	_ "github.com/qiangmzsx/go-fitz/include/mupdf"
+	_ "github.com/qiangmzsx/go-fitz/include/mupdf/fitz"
+	_ "github.com/qiangmzsx/go-fitz/libs"
 )

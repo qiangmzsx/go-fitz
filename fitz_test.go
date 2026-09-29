@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/gen2brain/go-fitz"
+	"github.com/qiangmzsx/go-fitz"
 )
 
 func TestImage(t *testing.T) {
