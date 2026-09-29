@@ -15,7 +15,7 @@ Go wrapper for [MuPDF](http://mupdf.com/) fitz library that can extract pages fr
 
 ### Notes
 
-The bundled libraries are built without CJK fonts, if you need them you must use the external library.
+The bundled libraries are built without a CJK font compiled in, so that they stay small. Instead, this fork installs a MuPDF system-font hook (`fz_install_load_system_font_funcs`) at context creation and serves Chinese from the host's installed fonts (Songti / STHeiti / Hiragino Sans GB on macOS). PDFs that reference non-embedded CID fonts such as STSong-Light / Adobe-GB1 therefore extract and render correctly. Japanese and Korean still return NULL from the hook and fall back to MuPDF's own behaviour, as does anything non-CJK.
 
 Concurrent rendering is supported when each goroutine uses its own `Document` (a separate MuPDF context). Concurrency on a single `Document`, including racing with `Close`, is not supported.
 

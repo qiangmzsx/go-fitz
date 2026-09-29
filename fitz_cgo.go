@@ -69,6 +69,50 @@ void silence_warnings(fz_context *ctx) {
 	fz_set_warning_callback(ctx, silent_warning, NULL);
 }
 
+// The bundled libraries are compiled with TOFU_CJK, so MuPDF has no CJK font of
+// its own. For a PDF that references a non-embedded CID font such as
+// STSong-Light / Adobe-GB1, pdf_load_substitute_cjk_font() finds neither a
+// system hook nor a builtin font, throws "cannot find builtin CJK font", and
+// pdf_try_load_font() then silently falls back to pdf_load_hail_mary_font() --
+// a Times-Roman simple font. The GBK bytes in the content stream get read as
+// Latin-1, so text extraction yields mojibake and the page renders with wrong
+// glyphs. Both symptoms, from one missing font.
+//
+// Installing a system-font hook is how MuPDF's own bindings solve this:
+// platform/java/jni/font.c, platform/wasm/lib/mupdf.c and source/tools/murun.c
+// all call fz_install_load_system_font_funcs. Reusing the host's installed CJK
+// fonts keeps the prebuilt libraries small, which is the reason the bundled ones
+// ship without a 24.8 MB Source Han Serif in the first place.
+//
+// Only the CJK hook is installed. The Latin and per-script fallback hooks stay
+// NULL so everything except missing-CJK-font keeps its current behaviour.
+static const char *cjk_font_candidates_zh[] = {
+	"/System/Library/Fonts/Supplemental/Songti.ttc",
+	"/System/Library/Fonts/STHeiti Medium.ttc",
+	"/System/Library/Fonts/Hiragino Sans GB.ttc",
+	NULL,
+};
+
+static fz_font *load_cjk_font(fz_context *ctx, const char *name, int ordering, int serif) {
+	// Chinese only. Japanese and Korean return NULL on purpose: substituting a
+	// Chinese face for them yields the wrong glyphs, and MuPDF already has its
+	// own fallback path for those collections.
+	if (ordering != FZ_ADOBE_GB && ordering != FZ_ADOBE_CNS)
+		return NULL;
+	for (int i = 0; cjk_font_candidates_zh[i]; i++) {
+		fz_font *f = fz_new_font_from_file(ctx, NULL, cjk_font_candidates_zh[i], 0, 0);
+		if (f)
+			return f;
+	}
+	// Returning NULL is the documented failure contract: MuPDF catches anything
+	// thrown from a hook and falls back on its own.
+	return NULL;
+}
+
+void install_cjk_font_hook(fz_context *ctx) {
+	fz_install_load_system_font_funcs(ctx, NULL, load_cjk_font, NULL);
+}
+
 // page_info sets *dpi to the page's native image resolution; for a single full-page image with no text it also sets *box and returns 1.
 int page_info(fz_context *ctx, fz_page *page, double *dpi, fz_rect *box) {
 	fz_rect b = fz_bound_page(ctx, page);
@@ -164,6 +208,8 @@ func New(filename string) (f *Document, err error) {
 
 	C.fz_register_document_handlers(f.ctx)
 
+	C.install_cjk_font_hook(f.ctx)
+
 	cfilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cfilename))
 
@@ -198,6 +244,8 @@ func NewFromMemory(b []byte) (f *Document, err error) {
 	C.silence_warnings(f.ctx)
 
 	C.fz_register_document_handlers(f.ctx)
+
+	C.install_cjk_font_hook(f.ctx)
 
 	f.stream = C.fz_open_memory(f.ctx, (*C.uchar)(&b[0]), C.size_t(len(b)))
 	if f.stream == nil {
